@@ -1,0 +1,111 @@
+Что и как мы делаем:
+
+1. Загрузка сырых данных из NCBI SRA (это карп)
+
+bash
+fastq-dump --split-files SRX8102923
+
+
+2. Очистка ридов
+
+bash
+trimmomatic PE -threads 8 SRX8102923_1.fastq SRX8102923_2.fastq \
+  SRX8102923_1_trimmed.fastq SRX8102923_1_unpaired.fastq \
+  SRX8102923_2_trimmed.fastq SRX8102923_2_unpaired.fastq \
+  ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36
+
+
+3. Mаппирование ридов на референсную мтДНК
+
+bash
+bwa mem -t 8 ref_mtDNA.fasta SRX8102923_1_trimmed.fastq SRX8102923_2_trimmed.fastq > SRX8102923.sam
+
+
+4. Подсчет статистики
+
+bash
+samtools view -F 4 SRX8102923.sam | cut -f 3 | sort | uniq -c | awk '{print $1/$2}'
+
+
+Посчитаем процент митохондриальных ридов среди всех ридов
+
+bash
+samtools depth ref_mtDNA.fasta SRX8102923.bam | awk '{sum+=$3} END {print sum/length(ref_mtDNA.fasta)}'
+
+
+Посчитаем покрытие по мтДНК
+
+5. SNP calling
+
+bash
+bcftools mpileup -Ou -f ref_mtDNA.fasta SRX8102923.bam | bcftools call -mv > SRX8102923.vcf
+
+
+6. Создание таблицы со снипами
+
+bash
+vcftools --vcf SRX8102923.vcf --out SRX8102923 --remove-indels --recode --recode-INFO-all
+
+
+
+
+Все это можно объединить в конвейер с помощью программы `Snakemake`.
+
+
+rule all:
+    input:
+        "SRX8102923.vcf.gz",
+        "SRX8102923_stats.txt"
+
+rule vcf_calling:
+    input:
+        "SRX8102923.bam"
+    output:
+        "SRX8102923.vcf.gz"
+    shell:
+        "bcftools mpileup -Ou -f ref_mtDNA.fasta {input} | bcftools call -mv > {output}"
+
+rule bam_sorting:
+    input:
+        "SRX8102923.sam"
+    output:
+        "SRX8102923.bam"
+    shell:
+        "samtools sort {input} > {output}"
+
+rule bam_mapping:
+    input:
+        "SRX8102923_1_trimmed.fastq",
+        "SRX8102923_2_trimmed.fastq"
+    output:
+        "SRX8102923.sam"
+    shell:
+        "bwa mem -t 8 ref_mtDNA.fasta {input} > {output}"
+
+rule trimming:
+    input:
+        "SRX8102923_1.fastq",
+        "SRX8102923_2.fastq"
+    output:
+        "SRX8102923_1_trimmed.fastq",
+        "SRX8102923_2_trimmed.fastq"
+    shell:
+        "trimmomatic PE -threads 8 {input} \
+        {output} \
+        ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36"
+
+rule stats:
+    input:
+        "SRX8102923.bam"
+    output:
+        "SRX8102923_stats.txt"
+    shell:
+        "samtools view -F 4 {input} | cut -f 3 | sort | uniq -c | awk '{print $1/$2}' > {output}"
+
+Запускаем:
+
+bash
+snakemake --cores 8
+
+честно говоря, у меня почему-то не работает, но я в первый раз собирала что-то в Снэкмэйке
+
