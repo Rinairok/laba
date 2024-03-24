@@ -1,0 +1,5 @@
+# Найти все гомоповторы аспарагина длиной 5 и сказать сколько их
+grep AAAAA sequence.fasta | wc -l
+
+# Или длиной 3 
+grep AAA sequence.fasta | wc -l
