@@ -1,5 +1,17 @@
-# Найти все гомоповторы аспарагина длиной 5 и сказать сколько их
-grep AAAAA sequence.fasta | wc -l
+# Найти все гомоповторы длиной 5 и посчитать сколько их
+grep -oP "(.)\\1{4}" sequence.fasta | sort | uniq -c
 
 # Или длиной 3 
-grep AAA sequence.fasta | wc -l
+grep -oP "(.)\\1{2}" sequence.fasta | sort | uniq -c
+
+#аутпут примерно такой:
+      3 AAA
+      1 EEE
+      4 GGG
+      1 HHH
+      2 LLL
+      5 SSS
+      3 VVV
+# а если в конце еще раз | sort, то разложится в порядке возрастания количества повторов
+
+grep -oP "(A)\\1{2}" sequence.fasta --> а вот так можно найти только ААА
